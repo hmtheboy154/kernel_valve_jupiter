@@ -9,10 +9,12 @@
 #include <linux/acpi.h>
 #include <linux/hwmon.h>
 #include <linux/platform_device.h>
+#include <linux/regmap.h>
 
 struct jupiter {
 	struct acpi_device *adev;
 	struct device *hwmon;
+	void *regmap;
 };
 
 static ssize_t
@@ -56,20 +58,54 @@ JUPITER_ATTR_WO(recalculate, "SCHG", U16_MAX);
  * FIXME: The following attributes should probably be moved out of
  * HWMON device since they don't reall belong to it
  */
-static ssize_t
-power_cycle_display_store(struct device *dev, struct device_attribute *attr,
-			  const char *buf, size_t count)
-{
-	struct jupiter *fan = dev_get_drvdata(dev);
+JUPITER_ATTR_WO(led_brightness, "CHBV", U8_MAX);
+JUPITER_ATTR_WO(content_adaptive_brightness, "CABC", U8_MAX);
+JUPITER_ATTR_WO(gamma_set, "GAMA", U8_MAX);
+JUPITER_ATTR_WO(display_brightness, "WDBV", U8_MAX);
+JUPITER_ATTR_WO(ctrl_display, "WCDV", U8_MAX);
+JUPITER_ATTR_WO(cabc_minimum_brightness, "WCMB", U8_MAX);
+JUPITER_ATTR_WO(memory_data_access_control, "MDAC", U8_MAX);
 
-	if (ACPI_FAILURE(acpi_evaluate_object(fan->adev->handle,
-					      "DPCY", NULL, NULL)))
-		return -EIO;
+#define JUPITER_ATTR_WO_NOARG(_name, _method)				\
+	static ssize_t _name##_store(struct device *dev,		\
+				     struct device_attribute *attr,	\
+				     const char *buf, size_t count)	\
+	{								\
+		struct jupiter *fan = dev_get_drvdata(dev);		\
+									\
+		if (ACPI_FAILURE(acpi_evaluate_object(fan->adev->handle, \
+						      _method, NULL, NULL))) \
+			return -EIO;					\
+									\
+		return count;						\
+	}								\
+	static DEVICE_ATTR_WO(_name)
 
-	return count;
-}
+JUPITER_ATTR_WO_NOARG(power_cycle_display, "DPCY");
+JUPITER_ATTR_WO_NOARG(display_normal_mode_on, "NORO");
+JUPITER_ATTR_WO_NOARG(display_inversion_off, "INOF");
+JUPITER_ATTR_WO_NOARG(display_inversion_on, "INON");
+JUPITER_ATTR_WO_NOARG(idle_mode_on, "WRNE");
 
-static DEVICE_ATTR_WO(power_cycle_display);
+#define JUPITER_ATTR_RO(_name, _method)					\
+	static ssize_t _name##_show(struct device *dev,			\
+				    struct device_attribute *attr,	\
+				    char *buf)				\
+	{								\
+		struct jupiter *jup = dev_get_drvdata(dev);		\
+		unsigned long long val;					\
+									\
+		if (ACPI_FAILURE(acpi_evaluate_integer(			\
+					 jup->adev->handle,		\
+					 _method, NULL, &val)))		\
+			return -EIO;					\
+									\
+		return sprintf(buf, "%llu\n", val);			\
+	}								\
+	static DEVICE_ATTR_RO(_name)
+
+JUPITER_ATTR_RO(firmware_version, "PDFW");
+JUPITER_ATTR_RO(board_id, "BOID");
 
 static umode_t
 jupiter_is_visible(struct kobject *kobj, struct attribute *attr, int index)
@@ -86,6 +122,23 @@ static struct attribute *jupiter_attributes[] = {
 	&dev_attr_maximum_battery_charge_rate.attr,
 	&dev_attr_recalculate.attr,
 	&dev_attr_power_cycle_display.attr,
+
+	&dev_attr_led_brightness.attr,
+	&dev_attr_content_adaptive_brightness.attr,
+	&dev_attr_gamma_set.attr,
+	&dev_attr_display_brightness.attr,
+	&dev_attr_ctrl_display.attr,
+	&dev_attr_cabc_minimum_brightness.attr,
+	&dev_attr_memory_data_access_control.attr,
+
+	&dev_attr_display_normal_mode_on.attr,
+	&dev_attr_display_inversion_off.attr,
+	&dev_attr_display_inversion_on.attr,
+	&dev_attr_idle_mode_on.attr,
+
+	&dev_attr_firmware_version.attr,
+	&dev_attr_board_id.attr,
+
 	NULL
 };
 
@@ -99,10 +152,87 @@ static const struct attribute_group *jupiter_groups[] = {
 	NULL
 };
 
+static int jupiter_hwmon_read(struct device *dev, enum hwmon_sensor_types type,
+			      u32 attr, int channel, long *temp)
+{
+
+	struct jupiter *jup = dev_get_drvdata(dev);
+	unsigned long long val;
+
+	if (attr != hwmon_temp_input)
+		return -EOPNOTSUPP;
+
+	if (ACPI_FAILURE(acpi_evaluate_integer(jup->adev->handle,
+					       "BATT", NULL, &val)))
+		return -EIO;
+	/*
+	 * Assuming BATT returns deg C we need to mutiply it by 1000
+	 * to convert to mC
+	 */
+	*temp = val * 1000;
+
+	return 0;
+}
+
+static int
+jupiter_hwmon_read_string(struct device *dev, enum hwmon_sensor_types type,
+			  u32 attr, int channel, const char **str)
+{
+	if (type != hwmon_temp ||
+	    attr != hwmon_temp_label)
+		return -EOPNOTSUPP;
+
+	*str = "Battery Temp";
+
+	return 0;
+}
+
+static umode_t
+jupiter_hwmon_is_visible(const void *data, enum hwmon_sensor_types type,
+			 u32 attr, int channel)
+{
+	return 0444;
+}
+
+static const struct hwmon_channel_info *jupiter_info[] = {
+	HWMON_CHANNEL_INFO(temp,
+			   HWMON_T_INPUT | HWMON_T_LABEL),
+	NULL
+};
+
+static const struct hwmon_ops jupiter_hwmon_ops = {
+	.is_visible = jupiter_hwmon_is_visible,
+	.read = jupiter_hwmon_read,
+	.read_string = jupiter_hwmon_read_string,
+};
+
+static const struct hwmon_chip_info jupiter_chip_info = {
+	.ops = &jupiter_hwmon_ops,
+	.info = jupiter_info,
+};
+
 #define JUPITER_STA_OK				\
 	(ACPI_STA_DEVICE_ENABLED |		\
 	 ACPI_STA_DEVICE_PRESENT |		\
 	 ACPI_STA_DEVICE_FUNCTIONING)
+
+static int
+jupiter_ddic_reg_read(void *context, unsigned int reg, unsigned int *val)
+{
+	union acpi_object obj = { .type = ACPI_TYPE_INTEGER };
+	struct acpi_object_list arg_list = { .count = 1, .pointer = &obj, };
+	struct jupiter *jup = context;
+	unsigned long long _val;
+
+	obj.integer.value = reg;
+
+	if (ACPI_FAILURE(acpi_evaluate_integer(jup->adev->handle,
+					       "RDDI", &arg_list, &_val)))
+		return -EIO;
+
+	*val = _val;
+	return 0;
+}
 
 static int jupiter_probe(struct platform_device *pdev)
 {
@@ -110,6 +240,14 @@ static int jupiter_probe(struct platform_device *pdev)
 	struct jupiter *jup;
 	acpi_status status;
 	unsigned long long sta;
+
+	static const struct regmap_config regmap_config = {
+		.reg_bits = 8,
+		.val_bits = 8,
+		.max_register = 255,
+		.cache_type = REGCACHE_NONE,
+		.reg_read = jupiter_ddic_reg_read,
+	};
 
 	jup = devm_kzalloc(dev, sizeof(*jup), GFP_KERNEL);
 	if (!jup)
@@ -129,14 +267,19 @@ static int jupiter_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	jup->hwmon = devm_hwmon_device_register_with_groups(dev,
-							    "jupiter",
-							    jup,
-							    jupiter_groups);
+	jup->hwmon = devm_hwmon_device_register_with_info(dev,
+							  "jupiter",
+							  jup,
+							  &jupiter_chip_info,
+							  jupiter_groups);
 	if (IS_ERR(jup->hwmon)) {
 		dev_err(dev, "Failed to register HWMON device");
 		return PTR_ERR(jup->hwmon);
 	}
+
+	jup->regmap = devm_regmap_init(dev, NULL, jup, &regmap_config);
+	if (IS_ERR(jup->regmap))
+		dev_err(dev, "Failed to register REGMAP");
 
 	return 0;
 }
