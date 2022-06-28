@@ -217,6 +217,8 @@
 #define mmSMUIO_MP_RESET_INTR_BASE_IDX                                                                 0
 #define mmSMUIO_SOC_HALT                                                                               0x00c2
 #define mmSMUIO_SOC_HALT_BASE_IDX                                                                      0
+#define mmSMUIO_GFX_MISC_CNTL                                                                          0x00c5
+#define mmSMUIO_GFX_MISC_CNTL_BASE_IDX                                                                 0
 #define mmSMUIO_PWRMGT                                                                                 0x00c8
 #define mmSMUIO_PWRMGT_BASE_IDX                                                                        0
 #define mmROM_CNTL                                                                                     0x00e0

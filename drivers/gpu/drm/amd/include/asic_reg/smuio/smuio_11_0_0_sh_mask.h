@@ -457,6 +457,11 @@
 #define SMUIO_PWRMGT__i2c1_clk_gate_en__SHIFT                                                                 0x4
 #define SMUIO_PWRMGT__i2c_clk_gate_en_MASK                                                                    0x00000001L
 #define SMUIO_PWRMGT__i2c1_clk_gate_en_MASK                                                                   0x00000010L
+//SMUIO_GFX_MISC_CNTL
+#define SMUIO_GFX_MISC_CNTL__SMU_GFX_cold_vs_gfxoff__SHIFT                                                    0x0
+#define SMUIO_GFX_MISC_CNTL__PWR_GFXOFF_STATUS__SHIFT                                                         0x1
+#define SMUIO_GFX_MISC_CNTL__SMU_GFX_cold_vs_gfxoff_MASK                                                      0x00000001L
+#define SMUIO_GFX_MISC_CNTL__PWR_GFXOFF_STATUS_MASK                                                           0x00000006L
 //ROM_CNTL
 #define ROM_CNTL__CLOCK_GATING_EN__SHIFT                                                                      0x0
 #define ROM_CNTL__SPI_TIMING_RELAX__SHIFT                                                                     0x14
