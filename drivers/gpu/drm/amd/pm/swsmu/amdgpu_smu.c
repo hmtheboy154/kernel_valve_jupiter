@@ -85,6 +85,30 @@ static int smu_sys_set_pp_feature_mask(void *handle,
 	return smu_set_pp_feature_mask(smu, new_mask);
 }
 
+int smu_set_residency_gfxoff(struct smu_context *smu, bool value)
+{
+	if (!smu->ppt_funcs->set_gfx_off_residency)
+		return -EINVAL;
+
+	return smu_set_gfx_off_residency(smu, value);
+}
+
+int smu_get_residency_gfxoff(struct smu_context *smu, u32 *value)
+{
+	if (!smu->ppt_funcs->get_gfx_off_residency)
+		return -EINVAL;
+
+	return smu_get_gfx_off_residency(smu, value);
+}
+
+int smu_get_entrycount_gfxoff(struct smu_context *smu, u32 *value)
+{
+	if (!smu->ppt_funcs->get_gfx_off_entrycount)
+		return -EINVAL;
+
+	return smu_get_gfx_off_entrycount(smu, value);
+}
+
 int smu_get_status_gfxoff(struct smu_context *smu, uint32_t *value)
 {
 	if (!smu->ppt_funcs->get_gfx_off_status)

@@ -388,6 +388,9 @@ void amdgpu_gfx_off_ctrl(struct amdgpu_device *adev, bool enable);
 int amdgpu_get_gfx_off_status(struct amdgpu_device *adev, uint32_t *value);
 int amdgpu_gfx_ras_late_init(struct amdgpu_device *adev, void *ras_info);
 void amdgpu_gfx_ras_fini(struct amdgpu_device *adev);
+int amdgpu_get_gfx_off_entrycount(struct amdgpu_device *adev, u32 *value);
+int amdgpu_get_gfx_off_residency(struct amdgpu_device *adev, u32 *residency);
+int amdgpu_set_gfx_off_residency(struct amdgpu_device *adev, bool value);
 int amdgpu_gfx_process_ras_data_cb(struct amdgpu_device *adev,
 		void *err_data,
 		struct amdgpu_iv_entry *entry);

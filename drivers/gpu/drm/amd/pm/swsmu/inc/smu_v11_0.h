@@ -238,6 +238,8 @@ int smu_v11_0_get_fan_speed_rpm(struct smu_context *smu,
 int smu_v11_0_set_xgmi_pstate(struct smu_context *smu,
 				     uint32_t pstate);
 
+uint32_t smu_v11_0_get_gfxoff_status(struct smu_context *smu);
+
 int smu_v11_0_gfx_off_control(struct smu_context *smu, bool enable);
 
 int smu_v11_0_register_irq_handler(struct smu_context *smu);
